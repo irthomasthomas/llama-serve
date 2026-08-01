@@ -93,3 +93,20 @@ journalctl --user -u llama@lfm-8b --since '-5 min' | grep -i -E 'cuda|vulkan|off
   `systemctl --user restart llama@<name>` — no daemon-reload needed for env
   changes.
 - `EnvironmentFile` path is absolute; if the repo moves, update the unit.
+
+## Router mode (single endpoint :8080)
+
+`llama-router.service` runs the router instead of per-model units. Chat/VL
+models load on demand through `--models-preset`; keep the tiny always-on
+services as per-model units so the router never evicts them:
+
+```sh
+cp systemd/llama-router.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now llama-router.service
+systemctl --user enable --now llama@lfm-embedding llama@lfm-colbert
+journalctl --user -u llama-router.service -f
+```
+
+Do NOT also enable `llama@lfm-8b` / other chat units — the router owns those
+ports (8080 routing decides which model serves each request).

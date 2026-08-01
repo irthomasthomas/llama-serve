@@ -144,6 +144,15 @@ sys.exit(0 if total < 11000 else 1)
 PY
 if [[ $? -eq 0 ]]; then ok "resident VRAM estimate < 11000 MiB"; else bad "resident VRAM estimate >= 11000 MiB"; fi
 
+
+echo "== 6. presets.ini semantically in sync with v2 registry =="
+if bash "$ROOT/router/gen-presets.sh" --check >/dev/null 2>&1; then
+  ok "registry <-> presets.ini semantic sync"
+else
+  bad "presets.ini out of sync with llama-serve-v2.sh registry"
+fi
+
 sec "RESULT"
 echo "  pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]
+
