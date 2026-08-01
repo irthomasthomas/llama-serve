@@ -42,7 +42,7 @@ check "-fa on"
 check "--cache-reuse 256"
 check "--jinja"
 check "--alias lfm2.5-8b-a1b"
-check "--spec-type ngram-simple"
+check "--spec-type ngram-mod"
 if grep -qE -- "--model-draft|--spec-draft" <<<"$args"; then bad "lfm-8b unexpectedly has spec-draft flags"; else ok "lfm-8b has no spec-draft flags"; fi
 log="$LOG_DIR/lfm-8b.log"
 grep -q 'LD_PRELOAD=<unset>' "$log" && ok "LD_PRELOAD stripped" || bad "LD_PRELOAD still set"
