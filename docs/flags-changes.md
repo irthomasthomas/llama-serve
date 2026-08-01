@@ -64,3 +64,27 @@ Other live findings on the RTX 3060 12 GB:
   it remains a swap-pool model.
 - lfm-8b is a REASONING model: short max_tokens yields empty `content` with
   output in `reasoning_content` (finish_reason=length). Verified 154 tok/s.
+
+## Self-speculative decoding via ngram-simple (2026-08-01, recommended)
+
+Draft-MODEL speculation is impossible for lfm-8b: HF check of every smaller
+LFM2.5 (1.2B / 350M / 230M) shows all use vocab 65536, but the 8B uses 128000
+(`model_type: lfm2_moe`). b9139 refuses mismatched draft/target vocabs.
+
+b9139 instead supports SELF-speculative ngram (no second model, no vocab
+constraint, ~0 extra VRAM):
+
+    --spec-type ngram-simple        # also: ngram-map-k, ngram-map-k4v, ngram-mod, ngram-cache, draft-eagle3
+
+Live benchmark on the RTX 3060 (lfm-8b Q6_K, ctx 65536, -np 1 -fa on):
+
+| workload                | baseline | ngram-simple | acceptance |
+|-------------------------|----------|--------------|------------|
+| short answer            | 154 t/s  | 154 t/s      | 0% (no context yet) |
+| code gen (300 tok)      | ~154 t/s | 161 t/s      | warming    |
+| repetitive list (400 tok)| ~154 t/s | 166 t/s      | 45% (18/40) |
+
+ngram speculation pays off on repetitive / code / RAG / self-referential
+output and costs nothing otherwise. Enabled on lfm-8b in both the launcher
+registry and router/presets.ini. (r/localllama also flags EAGLE3
+`draft-eagle3` — needs a trained EAGLE head GGUF, none published for LFM2.5.)
