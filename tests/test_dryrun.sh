@@ -26,10 +26,10 @@ run_launcher() {
   LLAMA_BIN="$STUB" LLAMA_PID_DIR="$PID_DIR" LLAMA_LOG_DIR="$LOG_DIR" "$SCRIPT" "$@"
 }
 cleanup() { rm -f "$PID_DIR"/*.pid "$ARGS_FILE" 2>/dev/null; }
-echo "== 1. start lfm-8b (speculative draft expected) =="
+echo "== 1. start lfm-8b (NO draft: 1.2b vocab incompatible with 8b) =="
 out=$(run_launcher start lfm-8b 2>&1)
 [[ $? -eq 0 ]] && ok "launcher exit 0" || { bad "launcher rc"; echo "$out"; }
-grep -q 'speculative decoding enabled' <<<"$out" && ok "draft info line printed" || bad "no draft info line"
+if grep -q 'speculative decoding enabled' <<<"$out"; then bad "unexpected draft enabled (vocabs incompatible)"; else ok "no draft info line (correct: vocabs incompatible)"; fi
 args="$(cat "$ARGS_FILE" 2>/dev/null)"
 [[ -n "$args" ]] && ok "stub captured argv" || bad "no argv captured"
 check() { grep -qF -- "$1" <<<"$args" && ok "lfm-8b arg: $1" || bad "lfm-8b missing: $1"; }
@@ -41,11 +41,8 @@ check "-np 1"
 check "-fa on"
 check "--cache-reuse 256"
 check "--jinja"
-check "--model-draft /home/thomas/models/LFM2.5-1.2B-Instruct-GGUF/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
-check "--spec-draft-ngl 99"
-check "--spec-draft-n-max 8"
-check "--spec-draft-n-min 2"
 check "--alias lfm2.5-8b-a1b"
+if grep -qE -- "--model-draft|--spec-draft" <<<"$args"; then bad "lfm-8b unexpectedly has spec-draft flags"; else ok "lfm-8b has no spec-draft flags"; fi
 log="$LOG_DIR/lfm-8b.log"
 grep -q 'LD_PRELOAD=<unset>' "$log" && ok "LD_PRELOAD stripped" || bad "LD_PRELOAD still set"
 grep -q 'CUDA_VISIBLE_DEVICES=0' "$log" && ok "CUDA_VISIBLE_DEVICES=0 forced" || bad "CUDA_VISIBLE_DEVICES wrong"

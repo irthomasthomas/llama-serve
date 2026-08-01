@@ -35,3 +35,32 @@ launcher.  The `X-Allow-Swap` gate and its enforcement live in
 a request may trigger eviction from the swap pool (see `FACTS.md` ->
 "swap pool").  `llama-serve-v2.sh` only starts/stops individual servers;
 it does not emit or honour `X-Allow-Swap` itself.
+
+---
+
+## Live-testing corrections (2026-08-01)
+
+The speculative-decoding flag set above was **validated against `--help` but
+NOT against a real load**. First live run of lfm-8b + lfm-1.2b draft showed:
+
+```
+common_speculative_are_compatible: draft model bos tokens must match target
+common_speculative_impl_draft_simple: the target and draft vocabs are not compatible
+srv  load_model: failed to initialize speculative decoding context
+```
+
+**lfm-1.2b (vocab 65536) is vocab-INCOMPATIBLE with lfm-8b (vocab 128000)** —
+llama-server b9139 silently disables speculation and serves without it. The
+draft wiring was removed from both the launcher registry and presets.ini. The
+`draft=` registry field remains for any future SAME-vocab draft pair.
+
+Other live findings on the RTX 3060 12 GB:
+- lfm-1.2b router ctx cut 128000 -> 32768 (1.5 GB q8 KV was squeezing lfm-8b
+  off the card; the launcher keeps 128000, divergence whitelisted in
+  gen-presets.sh --check).
+- lfm2-vl-450m lost load-on-startup: with --models-max 2, one free slot lets
+  a chat swap evict only ONE resident model (lfm-1.2b), avoiding OOM wedges.
+- vibethinker-3b (ctx 131072) cannot co-reside with lfm-8b (12 GB card);
+  it remains a swap-pool model.
+- lfm-8b is a REASONING model: short max_tokens yields empty `content` with
+  output in `reasoning_content` (finish_reason=length). Verified 154 tok/s.

@@ -113,8 +113,12 @@ for name, (path, ctx) in reg.items():
         print(f"MISSING section [{name}]", file=sys.stderr); bad = 1; continue
     if cp[name].get("model", "") != path:
         print(f"[{name}] model mismatch: {cp[name].get('model')} != {path}", file=sys.stderr); bad = 1
-    if cp[name].get("ctx-size", "") != ctx:
-        print(f"[{name}] ctx-size mismatch: {cp[name].get('ctx-size')} != {ctx}", file=sys.stderr); bad = 1
+    preset_ctx = cp[name].get("ctx-size", "").split("#")[0].strip()
+    # documented router-vs-launcher ctx divergences (VRAM budget on 12GB card)
+    CTX_WHITELIST = {"lfm-1.2b": {"32768", "128000"}}
+    allowed = CTX_WHITELIST.get(name, {ctx})
+    if preset_ctx != ctx and preset_ctx not in allowed:
+        print(f"[{name}] ctx-size mismatch: {preset_ctx} != {ctx}", file=sys.stderr); bad = 1
 sys.exit(bad)
 PYEOF2
     ;;
