@@ -1,0 +1,55 @@
+[Unit]
+Description=llama-server %i (b9139, CUDA)
+Documentation=file:/home/thomas/work/llama-serve-modern/FACTS.md
+After=default.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+# b9139 llama-server has NO sd_notify support (verified: no libsystemd in ldd,
+# no sd_notify symbol in binary) -> Type=simple, not notify.
+Type=simple
+
+# --- gpu-guard shim defeat (FACTS.md CRITICAL ENV BUG) -------------------
+# Agent shells export LD_PRELOAD=.../vk_layer_cpu_only.so and
+# CUDA_VISIBLE_DEVICES="" which silently forces CPU-only. Clear/override here.
+Environment=LD_PRELOAD=
+Environment=CUDA_VISIBLE_DEVICES=0
+
+# --- model instance config ----------------------------------------------
+# EnvironmentFile supplies MODEL_FILE (absolute path), PORT, ARGS (v2 flags).
+EnvironmentFile=-/home/thomas/work/llama-serve-modern/env/%i.env
+
+# --- sleep-free health-guard: wait until the port is free ----------------
+# Polls with ss; exits 0 as soon as nothing listens on $PORT (or after 30s
+# of hoping whoever owns it dies). No fixed sleep; fast-path is immediate.
+ExecStartPre=/bin/bash -c 'source /home/thomas/work/llama-serve-modern/env/%i.env; for i in $(seq 1 60); do ss -tlnH "sport = :${PORT}" | grep -q . || exit 0; sleep 0.5; done; echo "WARN: port ${PORT} still busy after 30s, starting anyway"; exit 0'
+
+# bash -c wrapper needed: systemd does NOT word-split $ARGS from the
+# EnvironmentFile; a shell is required to expand the flag string.
+ExecStart=/bin/bash -c 'exec /home/thomas/llama.cpp/build_optimized/bin/llama-server -m "${MODEL_FILE}" --port "${PORT}" ${ARGS}'
+
+# --- pidfile/artifact cleanup (template uses no pidfile, but drop a -----
+# runtime marker for external tooling; remove on stop either way)
+ExecStopPost=/bin/bash -c 'rm -f /run/user/%U/llama-%i.pid /run/user/%U/llama-%i.stopping 2>/dev/null || true'
+
+Restart=on-failure
+RestartSec=10
+
+# --- resource hardening ---------------------------------------------------
+LimitNOFILE=65535
+# GPU cgroup note: user units cannot set DeviceAllow= for /dev/nvidia*
+# (no privilege). GPU access is governed by the user session's existing
+# device ACLs (logind uaccess on the seat). If this unit is ever moved to a
+# system service, add: DeviceAllow=/dev/nvidia0 rw, DeviceAllow=/dev/nvidiactl rw,
+# DeviceAllow=/dev/nvidia-uvm rw and Nice=-5 for scheduling priority under
+# desktop load. Nice is omitted here deliberately: user-manager Nice is
+# capped at 0 and renicing the compositor's competitor causes churn.
+
+# --- logging: journald only, no file logs ---------------------------------
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-%i
+
+[Install]
+WantedBy=default.target
