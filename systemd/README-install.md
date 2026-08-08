@@ -110,3 +110,46 @@ journalctl --user -u llama-router.service -f
 
 Do NOT also enable `llama@lfm-8b` / other chat units — the router owns those
 ports (8080 routing decides which model serves each request).
+
+## BeeLlama fork units (lfm-2.6b, low-VRAM configs)
+
+BeeLlama v0.4.2 provides `--kv-tail-tokens` and KVarN cache types. Models
+using these features run through a separate template:
+
+```bash
+cp systemd/llama-bee@.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now llama-bee@lfm-2.6b-lowmem  # port 8087, 2.6 GB
+```
+
+The BeeLlama template hardcodes `LD_LIBRARY_PATH=/home/thomas/beellama.cpp/build/bin`
+for shared library resolution.
+
+## Co-located two-tier setup (lfm-2.6b + lfm-8b)
+
+Co-locates a fast 2.6B (128K context, 2.6 GB) alongside the full 8B (65K
+context, 7.2 GB) for a combined 10 GB / 12 GB VRAM budget:
+
+```bash
+cp systemd/llama-colocated.target ~/.config/systemd/user/
+systemctl --user daemon-reload
+
+# Start both as a unit
+systemctl --user enable --now llama-colocated.target
+
+# Or manage individually:
+systemctl --user enable --now llama-bee@lfm-2.6b-lowmem  # :8087 fast tier
+systemctl --user enable --now llama@lfm-8b                # :8080 full tier
+```
+
+Route simple/short prompts to :8087 (lfm2.5-2.6b-lowmem, ~144 tok/s),
+complex reasoning to :8080 (lfm2.5-8b-a1b, ~50 tok/s with speculation).
+
+VRAM budget at 128K context (RTX 3060 12 GB):
+
+| Model | VRAM | Gen tok/s |
+|---|---|---|
+| lfm-2.6b-lowmem (IQ4_XS, q3 KV) | 2645 MiB | 144 |
+| lfm-8b (Q6_K, q8 KV) | 7174 MiB | 50 |
+| **Combined** | **~10.1 GB** | — |
+| **Free** | **~2.2 GB** | — |

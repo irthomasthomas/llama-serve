@@ -1,0 +1,32 @@
+[Unit]
+Description=BeeLlama v0.4.2 server %i (CUDA)
+Documentation=file:/home/thomas/work/llama-serve-modern/FACTS.md
+After=default.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# gpu-guard shim defeat (FACTS.md CRITICAL ENV BUG)
+Environment=LD_PRELOAD=
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=LD_LIBRARY_PATH=/home/thomas/beellama.cpp/build/bin
+
+EnvironmentFile=-/home/thomas/work/llama-serve-modern/env/%i.env
+
+ExecStartPre=/bin/bash -c 'source /home/thomas/work/llama-serve-modern/env/%i.env; for i in $(seq 1 60); do ss -tlnH "sport = :${PORT}" | grep -q . || exit 0; sleep 0.5; done; echo "WARN: port ${PORT} still busy after 30s, starting anyway"; exit 0'
+
+ExecStart=/bin/bash -c 'exec /home/thomas/beellama.cpp/build/bin/llama-server -m "${MODEL_FILE}" --port "${PORT}" ${ARGS}'
+
+ExecStopPost=/bin/bash -c 'rm -f /run/user/%U/llama-%i.pid 2>/dev/null || true'
+
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-bee-%i
+
+[Install]
+WantedBy=default.target

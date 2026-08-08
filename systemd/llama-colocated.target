@@ -1,0 +1,8 @@
+[Unit]
+Description=Two-tier LFM co-location: lfm-2.6b-lowmem (8087) + lfm-8b (8080)
+Description=Co-locates fast 2.6B (128K ctx, 2.6 GB) with full 8B (65K ctx, 7.2 GB)
+Requires=llama-bee@lfm-2.6b-lowmem.service llama@lfm-8b.service
+After=llama-bee@lfm-2.6b-lowmem.service llama@lfm-8b.service
+
+[Install]
+WantedBy=default.target
