@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # ============================================================
 # llama-serve-v2.sh — Modernized multi-model llama-server launcher
-# Derived from legacy/llama-serve-v1.sh. Changes: -np 1, -fa on, --cache-reuse 256,
 # env-wrapper (gpu-guard shim fix), speculative decoding via registry draft= field.
 # One server per model family, best quant, per-model tuning.
 # ============================================================
 set -euo pipefail
 
 LLAMA_BIN="${LLAMA_BIN:-/home/thomas/llama.cpp/build_optimized/bin/llama-server}"
+BEE_BIN="${BEE_BIN:-/home/thomas/beellama.cpp/build/bin/llama-server}"
+BEE_LIB_DIR="/home/thomas/beellama.cpp/build/bin"
 MODELS_DIR="/home/thomas/models"
 LOG_DIR="${LLAMA_LOG_DIR:-/tmp/llama_logs}"
 PID_DIR="${LLAMA_PID_DIR:-/tmp/llama_pids}"
@@ -23,6 +24,15 @@ declare -A REGISTRY=(
   [lfm-8b]="$MODELS_DIR/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf|8080|65536|99|--alias lfm2.5-8b-a1b --temp 0.2 --top-k 80 --repeat-penalty 1.05 --chat-template-kwargs {\"keep_past_thinking\":true} --spec-type ngram-mod|draft=" # draft= unused: no same-vocab LFM2.5 draft exists; ngram-simple self-speculation instead (b9139, ~45%% accept on repetitive text, +8 tok/s, 0 extra VRAM)
   # [lfm-8b-maxctx]="$MODELS_DIR/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q4_K_M.gguf|8080|128000|99|--alias lfm2.5-8b-a1b-128k --chat-template-kwargs {\"keep_past_thinking\":true} --top-k 80 --repeat-penalty 1.05"
   [lfm-1.2b]="$MODELS_DIR/LFM2.5-1.2B-Instruct-GGUF/LFM2.5-1.2B-Instruct-Q4_K_M.gguf|8081|128000|99|--alias lfm2.5-1.2b-instruct|draft="
+  # LFM2.5-2.6B: uses BeeLlama fork (5% faster gen than official at Q8_0)
+  # Benchmarks (RTX 3060): official 98.5 tok/s, BeeLlama 103.8 tok/s, BeeLlama IQ4_XS 144.8 tok/s
+  [lfm-2.6b]="$MODELS_DIR/LFM2.5-2.6B-GGUF/LFM2.5-2.6B-Q8_0.gguf|8087|65536|99|--alias lfm2.5-2.6b --temp 0.2 --top-k 80 --repeat-penalty 1.05|draft=|bin=$BEE_BIN"
+  # Low-VRAM fallback (2.6 GB VRAM, 3.4 GB total) — BeeLlama only, edge of quality cliff
+  [lfm-2.6b-lowmem]="$MODELS_DIR/LFM2.5-2.6B-IQ4_XS/LiquidAI_LFM2.5-2.6B-IQ4_XS.gguf|8087|65536|99|--alias lfm2.5-2.6b-lowmem --temp 0.2 --top-k 80 --repeat-penalty 1.05 --cache-type-k q3_0 --cache-type-v q3_0 --kv-tail-tokens 512|draft=|bin=$BEE_BIN"
+  # 128K context — LFM Mamba hybrid makes this cheap: Q8_0=4.6 GB, IQ4_XS=2.6 GB VRAM
+  [lfm-2.6b-128k]="$MODELS_DIR/LFM2.5-2.6B-GGUF/LFM2.5-2.6B-Q8_0.gguf|8087|131072|99|--alias lfm2.5-2.6b-128k --temp 0.2 --top-k 80 --repeat-penalty 1.05|draft=|bin=$BEE_BIN"
+  # 128K low-VRAM: 2.6 GB total — fits alongside lfm-8b in 12 GB cards
+  [lfm-2.6b-128k-lowmem]="$MODELS_DIR/LFM2.5-2.6B-IQ4_XS/LiquidAI_LFM2.5-2.6B-IQ4_XS.gguf|8087|131072|99|--alias lfm2.5-2.6b-128k-lowmem --temp 0.2 --top-k 80 --repeat-penalty 1.05 --cache-type-k q3_0 --cache-type-v q3_0 --kv-tail-tokens 512|draft=|bin=$BEE_BIN"
   [vibethinker-3b]="$MODELS_DIR/VibeThinker-3B-GGUF/VibeThinker-3B.Q5_K_M.gguf|8082|131072|99|--alias vibethinker-3b --reasoning auto|draft="
   [fastcontext-rl]="$MODELS_DIR/FastContext-1.0-4B-RL-GGUF/FastContext-1.0-4B-RL.Q6_K.gguf|8083|65536|99|--alias fastcontext-4b-rl|draft="
   [fastcontext-sft]="$MODELS_DIR/FastContext-1.0-4B-SFT-Q5_K_M/fastcontext-1.0-4b-sft-q5_k_m.gguf|8084|65536|99|--alias fastcontext-4b-sft|draft="
@@ -258,6 +268,23 @@ start_model() {
   draft="$(_get_field "$entry" 6)"
   draft="${draft#draft=}"   # strip leading "draft="
 
+  local model_bin
+  model_bin="$(_get_field "$entry" 7)"
+  model_bin="${model_bin#bin=}"
+  [[ -z "$model_bin" ]] && model_bin="$LLAMA_BIN"
+
+  # Cache-type override: skip hardcoded defaults if extra args specify them
+  local ctk_args="-ctk q8_0 -ctv q8_0"
+  if echo "$extra" | grep -q -- '--cache-type-k\|--ctk'; then
+    ctk_args=""
+  fi
+
+  # LD_LIBRARY_PATH for BeeLlama shared libs
+  local model_ld_path=""
+  if [[ "$model_bin" == "$BEE_BIN" ]]; then
+    model_ld_path="$BEE_LIB_DIR"
+  fi
+
   [[ ! -f "$file" ]] && { echo "[ERR] File not found: $file"; return 1; }
 
   local pf
@@ -279,7 +306,7 @@ start_model() {
     else
       free_str="${free_mib}MiB"
     fi
-    echo "[INFO] $name: weights ~${wgb}GB, VRAM free ${free_str}, ctx=$ctx ngl=$ngl"
+    echo "[INFO] $name: weights ~${wgb}GB, VRAM free ${free_str}, ctx=$ctx ngl=$ngl bin=$(basename "$model_bin")"
   fi
 
   # Kill any stale process on this port
@@ -306,7 +333,7 @@ start_model() {
   # env wrapper strips gpu-guard shim (LD_PRELOAD) + hidden-GPU (CUDA_VISIBLE_DEVICES="")
   # that agent shells export; without it llama-server silently runs CPU-only. FACTS.md.
   # shellcheck disable=SC2086
-  nohup env -u LD_PRELOAD CUDA_VISIBLE_DEVICES=0 "$LLAMA_BIN" \
+  nohup env -u LD_PRELOAD CUDA_VISIBLE_DEVICES=0 ${model_ld_path:+LD_LIBRARY_PATH="$model_ld_path"} "$model_bin" \
     -m "$file" \
     -ngl "$ngl" \
     -c "$ctx" \
@@ -317,8 +344,7 @@ start_model() {
     -cb \
     -np 1 \
     -fa on \
-    -ctk q8_0 \
-    -ctv q8_0 \
+    $ctk_args \
     --jinja \
     --cache-reuse 256 \
     $spec_flags \
