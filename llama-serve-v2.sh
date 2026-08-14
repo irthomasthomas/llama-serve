@@ -20,13 +20,13 @@ mkdir -p "$LOG_DIR" "$PID_DIR"
 # Categories inferred from flags: --embedding => embedding, etc.
 declare -A REGISTRY=(
   # === Main chat models ===
-  [lfm-8b-base]="$MODELS_DIR/8B-A1B-Base-GGUF/LFM2.5-8B-A1B-Base-Q6_K.gguf|8090|65536|99|--alias lfm2.5-8b-a1b-base --temp 0.2 --top-k 80 --repeat-penalty 1.05|draft="
-  [lfm-8b]="$MODELS_DIR/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf|8080|65536|99|--alias lfm2.5-8b-a1b --temp 0.2 --top-k 80 --repeat-penalty 1.05 --chat-template-kwargs {\"keep_past_thinking\":true} --spec-type ngram-mod|draft=" # draft= unused: no same-vocab LFM2.5 draft exists; ngram-simple self-speculation instead (b9139, ~45%% accept on repetitive text, +8 tok/s, 0 extra VRAM)
+  [lfm-8b-base]="$MODELS_DIR/8B-A1B-Base-GGUF/LFM2.5-8B-A1B-Base-Q6_K.gguf|8090|128000|99|--alias lfm2.5-8b-a1b-base --temp 0.2 --top-k 80 --repeat-penalty 1.05|draft="
+  [lfm-8b]="$MODELS_DIR/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf|8080|128000|99|--alias lfm2.5-8b-a1b --temp 0.2 --top-k 80 --repeat-penalty 1.05 --chat-template-kwargs {\"keep_past_thinking\":true} --spec-type ngram-mod|draft=" # draft= unused: no same-vocab LFM2.5 draft exists; ngram-simple self-speculation instead (b9139, ~45%% accept on repetitive text, +8 tok/s, 0 extra VRAM)
   # [lfm-8b-maxctx]="$MODELS_DIR/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q4_K_M.gguf|8080|128000|99|--alias lfm2.5-8b-a1b-128k --chat-template-kwargs {\"keep_past_thinking\":true} --top-k 80 --repeat-penalty 1.05"
   [lfm-1.2b]="$MODELS_DIR/LFM2.5-1.2B-Instruct-GGUF/LFM2.5-1.2B-Instruct-Q4_K_M.gguf|8081|128000|99|--alias lfm2.5-1.2b-instruct|draft="
   # LFM2.5-2.6B: uses BeeLlama fork (5% faster gen than official at Q8_0)
   # Benchmarks (RTX 3060): official 98.5 tok/s, BeeLlama 103.8 tok/s, BeeLlama IQ4_XS 144.8 tok/s
-  [lfm-2.6b]="$MODELS_DIR/LFM2.5-2.6B-GGUF/LFM2.5-2.6B-Q8_0.gguf|8087|65536|99|--alias lfm2.5-2.6b --temp 0.2 --top-k 80 --repeat-penalty 1.05|draft=|bin=$BEE_BIN"
+  [lfm-2.6b]="$MODELS_DIR/LFM2.5-2.6B-GGUF/LFM2.5-2.6B-Q8_0.gguf|8087|65536|99|--alias lfm2.5-2.6b --temp 0.1 --top-k 50 --repeat-penalty 1.1|draft=|bin=$BEE_BIN"
   # Low-VRAM fallback (2.6 GB VRAM, 3.4 GB total) — BeeLlama only, edge of quality cliff
   [lfm-2.6b-lowmem]="$MODELS_DIR/LFM2.5-2.6B-IQ4_XS/LiquidAI_LFM2.5-2.6B-IQ4_XS.gguf|8087|65536|99|--alias lfm2.5-2.6b-lowmem --temp 0.2 --top-k 80 --repeat-penalty 1.05 --cache-type-k q3_0 --cache-type-v q3_0 --kv-tail-tokens 512|draft=|bin=$BEE_BIN"
   # 128K context — LFM Mamba hybrid makes this cheap: Q8_0=4.6 GB, IQ4_XS=2.6 GB VRAM
@@ -42,8 +42,11 @@ declare -A REGISTRY=(
   [lfm-colbert]="$MODELS_DIR/ColBERT-350M-GGUF/LFM2.5-ColBERT-350M-F16.gguf|8086|8192|99|--alias lfm2-colbert-350m --rerank --pooling rank|draft="
 
   # === Vision-language models ===
+  # LFM2.5-VL-3B benchmarks (RTX 3060, 280-tok gen): Q8_0 94.4 tok/s / ~3.3 GB VRAM, Q6_K 110.1 tok/s / ~2.7 GB VRAM
   [lfm2-vl-450m]="$MODELS_DIR/LFM2.5-VL-450M-GGUF/LFM2.5-VL-450M-Q8_0.gguf|8088|8192|99|--alias lfm2.5-vl-450m --mmproj $MODELS_DIR/LFM2.5-VL-450M-GGUF/mmproj-LFM2.5-VL-450m-Q8_0.gguf|draft="
   [lfm2-vl-1.6b]="/home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/LFM2.5-VL-1.6B-Q8_0.gguf|8089|32768|99|--alias lfm2.5-vl-1.6b --mmproj /home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf|draft="
+  [lfm2-vl-3b-8bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q8_0.gguf|8091|65536|99|--alias lfm2.5-vl-3b-8bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
+  [lfm2-vl-3b-6bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q6_K.gguf|8092|65536|99|--alias lfm2.5-vl-3b-6bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
 )
 
 # ---- Helpers -----------------------------------------------
