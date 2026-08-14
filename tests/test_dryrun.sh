@@ -35,7 +35,7 @@ args="$(cat "$ARGS_FILE" 2>/dev/null)"
 check() { grep -qF -- "$1" <<<"$args" && ok "lfm-8b arg: $1" || bad "lfm-8b missing: $1"; }
 check "-m /home/thomas/models/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf"
 check "--port 8080"
-check "-c 65536"
+check "-c 128000"
 check "-ngl 99"
 check "-np 1"
 check "-fa on"
@@ -57,7 +57,23 @@ grep -qF -- "--port 8081" <<<"$args" && ok "lfm-1.2b arg: --port 8081" || bad "l
 grep -qF -- "-c 128000" <<<"$args" && ok "lfm-1.2b arg: -c 128000" || bad "lfm-1.2b ctx wrong"
 grep -qE -- "--model-draft|--spec-draft" <<<"$args" && bad "lfm-1.2b has spec-draft flags" || ok "lfm-1.2b has no spec-draft flags"
 run_launcher stop lfm-1.2b >/dev/null 2>&1; cleanup
-echo "== 3. unknown model rejected =="
+echo "== 3. start lfm2-vl-3b (mmproj + per-quant ports) =="
+out=$(run_launcher start lfm2-vl-3b-8bit 2>&1)
+args="$(cat "$ARGS_FILE" 2>/dev/null)"
+check3() { grep -qF -- "$1" <<<"$args" && ok "vl-3b-8bit arg: $1" || bad "vl-3b-8bit missing: $1"; }
+check3 "-m /home/thomas/models/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q8_0.gguf"
+check3 "--port 8093"
+check3 "-c 65536"
+check3 "--mmproj /home/thomas/models/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf"
+check3 "--alias lfm2.5-vl-3b-8bit"
+run_launcher stop lfm2-vl-3b-8bit >/dev/null 2>&1; cleanup
+out=$(run_launcher start lfm2-vl-3b-6bit 2>&1)
+args="$(cat "$ARGS_FILE" 2>/dev/null)"
+grep -qF -- "-m /home/thomas/models/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q6_K.gguf" <<<"$args" && ok "vl-3b-6bit arg: Q6_K file" || bad "vl-3b-6bit wrong file"
+grep -qF -- "--port 8094" <<<"$args" && ok "vl-3b-6bit arg: --port 8094" || bad "vl-3b-6bit port wrong"
+run_launcher stop lfm2-vl-3b-6bit >/dev/null 2>&1; cleanup
+
+echo "== 4. unknown model rejected =="
 run_launcher start nope-model 2>&1 | grep -q 'Unknown model' && ok "unknown model rejected" || bad "unknown model not rejected"
 echo
 echo "== RESULT =="

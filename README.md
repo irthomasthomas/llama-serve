@@ -14,10 +14,16 @@ single RTX 3060 12 GB box. Two operating modes share one model registry:
 ./llama-serve-v2.sh list            # registry
 ./llama-serve-v2.sh start lfm-8b    # chat on :8080 (speculative draft on)
 ./llama-serve-v2.sh start lfm-1.2b  # fast chat on :8081
+./llama-serve-v2.sh start lfm2-vl-3b-6bit  # vision on :8094 (Q6_K, 110 tok/s)
 ./llama-serve-v2.sh status          # table + VRAM
 ./llama-serve-v2.sh vram            # per-process GPU holders
 ./llama-serve-v2.sh evict --free 6000   # free VRAM, largest ctx first
 ```
+
+Vision-language models: `lfm2-vl-450m` (:8088), `lfm2-vl-1.6b` (:8089),
+`lfm2-vl-3b-8bit` (:8093, Q8_0, 94.4 tok/s @ ~3.3 GB) and
+`lfm2-vl-3b-6bit` (:8094, Q6_K, 110.1 tok/s @ ~2.7 GB). Ports 8093/8094 sit
+above `llama-guard`'s default :8091 to avoid collisions.
 
 ## Quick start (router)
 

@@ -45,8 +45,8 @@ declare -A REGISTRY=(
   # LFM2.5-VL-3B benchmarks (RTX 3060, 280-tok gen): Q8_0 94.4 tok/s / ~3.3 GB VRAM, Q6_K 110.1 tok/s / ~2.7 GB VRAM
   [lfm2-vl-450m]="$MODELS_DIR/LFM2.5-VL-450M-GGUF/LFM2.5-VL-450M-Q8_0.gguf|8088|8192|99|--alias lfm2.5-vl-450m --mmproj $MODELS_DIR/LFM2.5-VL-450M-GGUF/mmproj-LFM2.5-VL-450m-Q8_0.gguf|draft="
   [lfm2-vl-1.6b]="/home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/LFM2.5-VL-1.6B-Q8_0.gguf|8089|32768|99|--alias lfm2.5-vl-1.6b --mmproj /home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf|draft="
-  [lfm2-vl-3b-8bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q8_0.gguf|8091|65536|99|--alias lfm2.5-vl-3b-8bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
-  [lfm2-vl-3b-6bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q6_K.gguf|8092|65536|99|--alias lfm2.5-vl-3b-6bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
+  [lfm2-vl-3b-8bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q8_0.gguf|8093|65536|99|--alias lfm2.5-vl-3b-8bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
+  [lfm2-vl-3b-6bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q6_K.gguf|8094|65536|99|--alias lfm2.5-vl-3b-6bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
 )
 
 # ---- Helpers -----------------------------------------------

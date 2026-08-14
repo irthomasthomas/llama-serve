@@ -11,7 +11,8 @@ REGISTRY_SCRIPT="$ROOT/llama-serve-v2.sh"
 # --- extract the registry from llama-serve-v2.sh without executing it ------
 # The registry is the declare -A REGISTRY=( ... ) block; source only that.
 MODELS_DIR="/home/thomas/models"
-export MODELS_DIR
+BEE_BIN="${BEE_BIN:-/home/thomas/beellama.cpp/build/bin/llama-server}"
+export MODELS_DIR BEE_BIN
 REG_BLOCK=$(awk '/^declare -A REGISTRY=\(/,/^\)/' "$REGISTRY_SCRIPT")
 [[ -n "$REG_BLOCK" ]] || { echo "ERR: registry block not found" >&2; exit 1; }
 declare -A REGISTRY=()

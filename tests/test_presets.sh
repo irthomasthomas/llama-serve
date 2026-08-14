@@ -39,8 +39,10 @@ p.read(sys.argv[1], encoding="utf-8")
 print(sum(1 for s in p.sections() if s != "*"))
 PY
 )
-# Count uncommented REGISTRY entries:  <spaces>[name]="...   (name may contain . - _)
-reg_n=$(grep -oE '^[[:space:]]*\[[A-Za-z0-9._-]+\][[:space:]]*=' "$LEGACY" \
+# Count uncommented REGISTRY entries in the v2 registry (the generator source):
+#   <spaces>[name]="...   (name may contain . - _)
+REGISTRY_SCRIPT="$ROOT/llama-serve-v2.sh"
+reg_n=$(grep -oE '^[[:space:]]*\[[A-Za-z0-9._-]+\][[:space:]]*=' "$REGISTRY_SCRIPT" \
         | grep -vE '^[[:space:]]*#' | wc -l)
 echo "  presets=$preset_n  registry=$reg_n"
 if (( preset_n == reg_n )) && (( preset_n > 0 )); then ok "counts match ($preset_n)"; else bad "count mismatch"; fi
