@@ -54,6 +54,10 @@ HDR
     extra=$(echo "$entry" | cut -d'|' -f5)
     draft=$(echo "$entry" | cut -d'|' -f6); draft="${draft#draft=}"
 
+    # vLLM-served models run as their own process (external launcher); they are
+    # not GGUF presets for the llama.cpp router — skip them here.
+    [[ "$extra" == vllm:* ]] && continue
+
     echo "[$name]"
     echo "model    = $file"
     echo "ctx-size = $ctx"
@@ -105,6 +109,9 @@ for line in m.group(1).splitlines():
     mm = re.match(r'\s*\[([^\]]+)\]="([^"]+)"', line)
     if mm:
         f = mm.group(2).split("|")
+        # skip vLLM-served models (field 5 starts with vllm:) — no preset section
+        if len(f) > 4 and f[4].startswith("vllm:"):
+            continue
         reg[mm.group(1)] = (f[0].replace("$MODELS_DIR", "/home/thomas/models"), f[2])
 cp = configparser.ConfigParser()
 cp.read(presets_path)

@@ -42,8 +42,10 @@ PY
 # Count uncommented REGISTRY entries in the v2 registry (the generator source):
 #   <spaces>[name]="...   (name may contain . - _)
 REGISTRY_SCRIPT="$ROOT/llama-serve-v2.sh"
-reg_n=$(grep -oE '^[[:space:]]*\[[A-Za-z0-9._-]+\][[:space:]]*=' "$REGISTRY_SCRIPT" \
-        | grep -vE '^[[:space:]]*#' | wc -l)
+# vLLM-served registry entries (extra field "vllm:...") have no router preset;
+# exclude them so the count matches presets.ini sections.
+reg_n=$(grep -E '^[[:space:]]*\[[A-Za-z0-9._-]+\][[:space:]]*=' "$REGISTRY_SCRIPT" \
+        | grep -vE '^[[:space:]]*#' | grep -v 'vllm:' | wc -l)
 echo "  presets=$preset_n  registry=$reg_n"
 if (( preset_n == reg_n )) && (( preset_n > 0 )); then ok "counts match ($preset_n)"; else bad "count mismatch"; fi
 

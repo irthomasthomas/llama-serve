@@ -47,6 +47,8 @@ declare -A REGISTRY=(
   [lfm2-vl-1.6b]="/home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/LFM2.5-VL-1.6B-Q8_0.gguf|8089|32768|99|--alias lfm2.5-vl-1.6b --mmproj /home/thomas/.cache/huggingface/hub/models--LiquidAI--LFM2.5-VL-1.6B-GGUF/snapshots/0df8719db7180cedababc2bc589abfe5e8ebcd1f/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf|draft="
   [lfm2-vl-3b-8bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q8_0.gguf|8093|65536|99|--alias lfm2.5-vl-3b-8bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
   [lfm2-vl-3b-6bit]="$MODELS_DIR/LFM2.5-VL-3B-GGUF/LFM2.5-VL-3B-Q6_K.gguf|8094|65536|99|--alias lfm2.5-vl-3b-6bit --mmproj $MODELS_DIR/LFM2.5-VL-3B-GGUF/mmproj-LFM2.5-VL-3B-Q8_0.gguf|draft="
+  # === vLLM-served models (non-GGUF; extra="vllm:<launcher>" delegates to external script) ===
+  [ling-3.0-tiny]="/home/thomas/models/Ling-3.0-tiny-int4|8300|8192|0|vllm:/home/thomas/ling3-start.sh|draft=|bin="
 )
 
 # ---- Helpers -----------------------------------------------
@@ -286,6 +288,32 @@ start_model() {
   local model_ld_path=""
   if [[ "$model_bin" == "$BEE_BIN" ]]; then
     model_ld_path="$BEE_LIB_DIR"
+  fi
+
+  # vLLM-served model: delegate to external launcher script (port readiness poll)
+  if [[ "$extra" == vllm:* ]]; then
+    local launcher="${extra#vllm:}"
+    launcher="${launcher/#\~/$HOME}"
+    pf="$(_pid_file "$name")"
+    if _is_running "$pf"; then
+      echo "[OK] $name already running (PID $(cat "$pf")) on port $port"
+      return 0
+    fi
+    [[ ! -x "$launcher" ]] && { echo "[ERR] Launcher not executable: $launcher"; return 1; }
+    local lf="$(_log_file "$name")"
+    echo "[START] $name via vLLM launcher: $launcher (log: $lf)"
+    nohup "$launcher" > "$lf" 2>&1 &
+    local vpid=$!
+    echo "$vpid" > "$pf"
+    disown "$vpid" 2>/dev/null || true
+    local i
+    for i in $(seq 1 120); do
+      curl -sf -m 2 "http://127.0.0.1:${port}/v1/models" >/dev/null 2>&1 && break
+      _is_running "$pf" || { echo "[ERR] $name launcher died — see $lf"; tail -5 "$lf" 2>/dev/null; rm -f "$pf"; return 1; }
+      sleep 5
+    done
+    curl -sf -m 2 "http://127.0.0.1:${port}/v1/models" >/dev/null 2>&1       && echo "[OK] $name serving on port $port"       || echo "[WARN] $name not answering on :$port after 10min; still loading? log: $lf"
+    return 0
   fi
 
   [[ ! -f "$file" ]] && { echo "[ERR] File not found: $file"; return 1; }
