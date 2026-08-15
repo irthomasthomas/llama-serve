@@ -128,7 +128,39 @@ out=$(run_health)
 grep -q "recovered" <<<"$out" && ok "recovery: recovered message" || bad "recovery: no recovered message"
 [[ "$(cat "$RT/llama-health/lfm-8b.fails")" == "0" ]] && ok "recovery: counter reset" || bad "recovery: counter not reset"
 
-echo
-echo "== RESULT =="
+echo "== 4. launch.sh --check-wedge unit (fixture logs) =="
+LAUNCH="$ROOT/router/launch.sh"
+FIX="$TMP/fixtures"; mkdir -p "$FIX"
+# wedged: model load failed (OOM) + newest lines stuck in ensure_model wait
+cat > "$FIX/wedged.log" <<'LOG'
+load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 6629.52 MiB on device 0: cudaMalloc failed: out of memory
+llama_model_load: error loading model: unable to allocate CUDA0 buffer
+common_init_from_params: failed to load model '/home/thomas/models/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf'
+srv    load_model: failed to load model, '/home/thomas/models/LFM2.5-8B-A1B-GGUF/LFM2.5-8B-A1B-Q6_K.gguf'
+srv    operator(): operator(): cleaning up before exit...
+srv  ensure_model: waiting until model name=lfm-8b is fully loaded...
+LOG
+# healthy: listening, no failure, no ensure_model wait
+cat > "$FIX/healthy.log" <<'LOG'
+llama_model_load: loading model weights
+main: server is listening on http://0.0.0.0:8080
+srv  update_slots: all slots are idle
+srv  log_server_r: done request: GET /health 127.0.0.1 200
+LOG
+# loading: progressing but no ensure_model wait (healthy in the making)
+cat > "$FIX/loading.log" <<'LOG'
+print_info: model type = 8B.A1B
+load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
+LOG
+cp "$FIX/wedged.log" "$FIX/router.log"
+LLAMA_LOG_DIR="$FIX" bash "$LAUNCH" --check-wedge && ok "wedge log detected" || bad "wedge log not detected"
+LLAMA_LOG_DIR="$TMP" bash "$LAUNCH" --check-wedge >/dev/null 2>&1 && bad "missing log treated as wedged" || ok "missing log not wedged"
+cp "$FIX/healthy.log" "$FIX/router.log"
+LLAMA_LOG_DIR="$FIX" bash "$LAUNCH" --check-wedge >/dev/null 2>&1 && bad "healthy log treated as wedged" || ok "healthy log not wedged"
+cp "$FIX/loading.log" "$FIX/router.log"
+LLAMA_LOG_DIR="$FIX" bash "$LAUNCH" --check-wedge >/dev/null 2>&1 && bad "loading log treated as wedged" || ok "loading log not wedged"
+
+
 echo "  pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]
